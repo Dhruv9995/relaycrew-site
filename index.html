@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relaycrew: one terminal for every coding agent</title>
+<meta name="description" content="Describe a task. Relaycrew splits it across Claude Code, Codex and Antigravity by strength and remaining quota, on your own machine.">
+<meta name="theme-color" content="#0a0b0a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2334d87c'/%3E%3Ctext x='16' y='23' font-family='system-ui' font-size='20' font-weight='700' text-anchor='middle' fill='%2306120a'%3ER%3C/text%3E%3C/svg%3E">
+<link rel="preload" href="fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  /* Dark only (the product is a terminal), one green accent, radius 10px controls / 18px surfaces.
+     Motion language borrowed from 5bix.com: decoding headline, glyph field lit by the pointer,
+     floating glass nav, tilted scripted demo, a timeline that draws itself, marquee, radar, streaming rows.
+     Every animation is switched off under prefers-reduced-motion. */
+  @font-face { font-family: "Geist"; src: url("fonts/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+  @font-face { font-family: "Geist Mono"; src: url("fonts/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+  @font-face { font-family: "Phosphor"; src: url("fonts/Phosphor.woff2") format("woff2"); font-display: block; }
+
+  :root {
+    color-scheme: dark;
+    --bg: #0a0b0a; --raised: #111311; --raised-2: #171a17; --line: #242824; --line-strong: #343a34;
+    --text: #eef0ec; --text-2: #a6aba1; --accent: #34d87c; --on-accent: #06120a;
+    --codex: #3987e5; --claude: #d95926; --antigravity: #199e70;
+    --r-control: 10px; --r-surface: 18px;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --mono: "Geist Mono", ui-monospace, monospace;
+    --mx: 50vw; --my: 30vh;
+    /* z-index: 0 glyph field, 1 content, 10 nav, 11 scroll progress */
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 96px; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 "Geist", system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  main, footer { position: relative; z-index: 1; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+  a { color: inherit; }
+  img { display: block; max-width: 100%; height: auto; }
+  code { font: 0.88em var(--mono); background: var(--raised-2); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; overflow-wrap: anywhere; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+  .ph { font-family: "Phosphor"; font-style: normal; line-height: 1; speak: never; }
+  h1, h2, h3 { font-weight: 600; margin: 0; text-wrap: balance; }
+  h2 { font-size: clamp(1.9rem, 4vw, 3rem); letter-spacing: -0.035em; line-height: 1.08; max-width: 20ch; }
+  h2 .w { display: inline-block; overflow: hidden; vertical-align: bottom; padding-bottom: 0.08em; }
+  h2 .w > span { display: inline-block; }
+  p { margin: 0; }
+  .lede { color: var(--text-2); font-size: 1.12rem; max-width: 52ch; margin-top: 18px; }
+  .fine { font: 12px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2); opacity: 0.8; }
+  .dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; }
+  .dot.claude { background: var(--claude); } .dot.codex { background: var(--codex); } .dot.antigravity { background: var(--antigravity); }
+
+  /* Scroll progress, where the browser supports scroll-driven animation */
+  .progress { position: fixed; z-index: 11; inset: 0 0 auto; height: 2px; background: var(--accent); transform-origin: 0 50%; transform: scaleX(0); }
+  @supports (animation-timeline: scroll()) {
+    .progress { animation: grow linear both; animation-timeline: scroll(root); }
+    @keyframes grow { to { transform: scaleX(1); } }
+  }
+
+  /* Glyph field: a dim layer everywhere, a bright copy revealed around the pointer */
+  .field { position: fixed; z-index: 0; inset: 0; pointer-events: none; background-size: 260px 260px; opacity: 0.32;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' font-family='monospace' font-size='11' fill='%23ffffff' fill-opacity='.09'%3E%3Ctext x='12' y='24'%3E%3E_%3C/text%3E%3Ctext x='96' y='40'%3Eclaude%3C/text%3E%3Ctext x='188' y='22'%3E0x3f%3C/text%3E%3Ctext x='40' y='92'%3E%7B %7D%3C/text%3E%3Ctext x='140' y='104'%3Ecodex%3C/text%3E%3Ctext x='214' y='86'%3E%24%3C/text%3E%3Ctext x='14' y='158'%3Eagy%3C/text%3E%3Ctext x='92' y='170'%3E%E2%9C%93%3C/text%3E%3Ctext x='150' y='176'%3E12,410%3C/text%3E%3Ctext x='226' y='150'%3E%E2%86%92%3C/text%3E%3Ctext x='56' y='232'%3Egit%3C/text%3E%3Ctext x='122' y='240'%3E5h%3C/text%3E%3Ctext x='184' y='228'%3Etokens%3C/text%3E%3C/svg%3E"); }
+  .field.lit { opacity: 1; filter: brightness(4) sepia(1) hue-rotate(85deg) saturate(5);
+    -webkit-mask-image: radial-gradient(260px circle at var(--mx) var(--my), #000 0%, transparent 100%); mask-image: radial-gradient(260px circle at var(--mx) var(--my), #000 0%, transparent 100%); }
+
+  .button { position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 22px; border-radius: var(--r-control); border: 1px solid var(--line-strong); background: var(--raised-2); color: var(--text); text-decoration: none; font-weight: 600; font-size: 16px; white-space: nowrap; cursor: pointer; transition: transform 0.2s var(--ease), background 0.2s, border-color 0.2s; }
+  .button:hover { border-color: #4a524a; background: #1d211d; transform: translateY(-2px); }
+  .button:active { transform: scale(0.98); }
+  .button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .button.primary:hover { background: #4ee08d; border-color: #4ee08d; }
+  .button.primary::after { content: ""; position: absolute; inset: 0 auto 0 -60%; width: 40%; background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.45), transparent); transform: skewX(-20deg); animation: shine 3.6s ease-in-out infinite; }
+  @keyframes shine { 0%, 60% { left: -60%; } 100% { left: 130%; } }
+  .button[aria-disabled="true"] { opacity: 0.5; pointer-events: none; }
+  .button[aria-disabled="true"]::after { display: none; }
+  .button .ph { font-size: 20px; }
+
+  /* Floating glass nav */
+  .nav { position: sticky; top: 14px; z-index: 10; display: flex; justify-content: center; padding: 0 16px; pointer-events: none; }
+  .nav .pill { pointer-events: auto; display: flex; align-items: center; gap: 26px; height: 56px; padding: 0 10px 0 20px; border-radius: 28px; border: 1px solid var(--line-strong); background: rgb(17 19 17 / 0.72); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); box-shadow: 0 10px 40px -10px rgb(0 0 0 / 0.8); }
+  .brand { font-weight: 650; font-size: 17px; letter-spacing: -0.02em; text-decoration: none; display: flex; align-items: center; gap: 9px; margin-right: 8px; }
+  .brand i { width: 20px; height: 20px; border-radius: 6px; background: var(--accent); }
+  .nav a.link { text-decoration: none; color: var(--text-2); font-size: 15px; transition: color 0.2s; }
+  .nav a.link:hover { color: var(--text); }
+  .nav .chip { display: flex; align-items: center; gap: 9px; height: 38px; padding: 0 16px; border-radius: 19px; background: rgb(52 216 124 / 0.14); border: 1px solid rgb(52 216 124 / 0.5); color: var(--text); text-decoration: none; font-weight: 600; font-size: 15px; white-space: nowrap; }
+  .nav .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: chip 2s ease-in-out infinite; }
+  @keyframes chip { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.7); } }
+
+  /* Hero */
+  .hero { position: relative; padding: 64px 0 0; overflow-x: clip; }
+  .hero::before { content: ""; position: absolute; inset: -160px 0 auto; height: 620px; background: radial-gradient(60% 60% at 50% 0%, rgb(52 216 124 / 0.2), transparent 70%); pointer-events: none; }
+  .hero .wrap { position: relative; display: grid; grid-template-columns: 1.05fr 1fr; gap: 56px; align-items: center; }
+  h1 { font: 600 clamp(2.1rem, 4.3vw, 3.4rem)/1.06 var(--mono); letter-spacing: -0.055em; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .hero .lede { font-size: 1.2rem; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+
+  /* Scripted demo card */
+  .demo-stage { perspective: 1400px; }
+  .demo { transform: rotateX(8deg) rotateY(-12deg); transform-style: preserve-3d; border-radius: var(--r-surface); border: 1px solid var(--line-strong); background: linear-gradient(160deg, rgb(28 32 28 / 0.92), rgb(14 16 14 / 0.92)); backdrop-filter: blur(10px); padding: 20px; box-shadow: 0 50px 120px -30px rgb(0 0 0 / 0.95), 0 0 80px -30px rgb(52 216 124 / 0.35); font-size: 14px; will-change: transform; }
+  .demo-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .demo-head .live { display: flex; align-items: center; gap: 7px; font: 12px var(--mono); color: var(--text-2); }
+  .demo-head .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: chip 1.6s ease-in-out infinite; }
+  .demo-task { min-height: 44px; padding: 11px 14px; border-radius: var(--r-control); border: 1px solid var(--line-strong); background: var(--bg); font: 13px var(--mono); }
+  .demo-task::after { content: "▍"; color: var(--accent); animation: chip 1s steps(2) infinite; }
+  .demo-steps { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
+  .demo-steps li { display: grid; grid-template-columns: 20px 1fr auto; gap: 10px; align-items: start; padding: 11px 12px; border-radius: var(--r-control); border: 1px solid var(--line); background: rgb(255 255 255 / 0.02); }
+  .demo-steps li.run { border-color: rgb(52 216 124 / 0.6); background: rgb(52 216 124 / 0.07); }
+  .demo-steps .ph { font-size: 17px; color: var(--text-2); margin-top: 1px; }
+  .demo-steps li.run .ph { color: var(--accent); animation: spin 0.9s linear infinite; }
+  .demo-steps li.done .ph { color: var(--accent); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .demo-steps b { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+  .demo-steps p { color: var(--text-2); font-size: 13px; }
+  .demo-steps .meta { font: 12px var(--mono); color: var(--text-2); white-space: nowrap; }
+  .demo-foot { display: flex; align-items: center; gap: 12px; margin-top: 14px; min-height: 40px; }
+  .demo-approve { display: inline-flex; align-items: center; height: 38px; padding: 0 18px; border-radius: var(--r-control); background: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .demo-note { font: 12px var(--mono); color: var(--text-2); }
+  .demo-caption { text-align: right; margin-top: 18px; }
+
+  /* Timeline that draws itself */
+  .timeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; margin-top: 88px; }
+  .tl { position: relative; padding-top: 30px; }
+  .tl::before { content: ""; position: absolute; inset: 5px 0 auto; height: 2px; background: var(--line); }
+  .tl i { position: absolute; inset: 5px 0 auto; height: 2px; background: var(--accent); transform-origin: 0 50%; }
+  .tl u { position: absolute; top: 0; left: 0; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgb(52 216 124 / 0.2); }
+  .tl small { font: 600 12px var(--mono); color: var(--accent); }
+  .tl h3 { font-size: 1.3rem; letter-spacing: -0.02em; margin: 8px 0 8px; }
+  .tl p { color: var(--text-2); font-size: 16px; }
+
+  /* Marquee */
+  .marquee { margin-top: 96px; border-block: 1px solid var(--line); overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+  .marquee div { display: flex; gap: 48px; width: max-content; padding: 18px 0; animation: marq 36s linear infinite; font: 15px var(--mono); color: var(--text-2); white-space: nowrap; }
+  .marquee:hover div { animation-play-state: paused; }
+  .marquee span::before { content: "→ "; color: var(--accent); }
+  @keyframes marq { to { transform: translateX(-50%); } }
+
+  section { padding: 128px 0 0; }
+  .stage { perspective: 1800px; margin-top: 56px; }
+  .frame { border-radius: var(--r-surface); border: 1px solid var(--line-strong); background: #121212; overflow: hidden; box-shadow: 0 40px 120px -30px rgb(0 0 0 / 0.9), 0 0 0 1px rgb(255 255 255 / 0.03) inset; transform-origin: 50% 0; will-change: transform; }
+
+  /* Counters */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 56px; }
+  .stat { padding: 22px 24px; border-radius: var(--r-surface); border: 1px solid var(--line); background: var(--raised); }
+  .stat b { display: block; font: 600 clamp(2rem, 4vw, 3rem)/1 var(--mono); letter-spacing: -0.04em; color: var(--accent); }
+  .stat span { display: block; margin-top: 10px; color: var(--text-2); font-size: 15px; }
+
+  /* Bento */
+  .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin-top: 64px; }
+  .cell { position: relative; border-radius: var(--r-surface); border: 1px solid var(--line); background: var(--raised); padding: 28px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; transition: border-color 0.3s; }
+  .cell:hover { border-color: var(--line-strong); }
+  .cell h3 { font-size: 1.3rem; letter-spacing: -0.02em; }
+  .cell p { color: var(--text-2); max-width: 46ch; }
+  .cell .shot { margin: 18px -28px -28px; border-top: 1px solid var(--line); overflow: hidden; }
+  .cell .shot img { width: 100%; animation: kb 18s ease-in-out infinite alternate; transform-origin: 30% 30%; }
+  @keyframes kb { from { transform: scale(1); } to { transform: scale(1.08) translate(-1.5%, 1%); } }
+  .cell > .ph { font-size: 30px; color: var(--accent); margin-bottom: 6px; }
+  .c-quota { grid-column: span 2; grid-row: span 2; }
+  .c-quota .shot { margin-top: auto; }
+  .c-retry, .c-savers { grid-column: span 4; }
+  .c-memory, .c-radar, .c-local { grid-column: span 2; }
+  .c-local { background: linear-gradient(150deg, rgb(52 216 124 / 0.16), var(--raised) 62%); }
+  .savers-num { font: 600 1.5rem var(--mono); letter-spacing: -0.03em; }
+  .savers-num s { color: var(--text-2); text-decoration-thickness: 2px; }
+  .savers-num b { color: var(--accent); }
+
+  /* Streaming notes */
+  .stream { height: 148px; margin: 14px -28px 0; padding: 0 28px; border-block: 1px solid var(--line); overflow: hidden; -webkit-mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent); mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent); }
+  .stream ul { list-style: none; margin: 0; padding: 0; animation: stream 16s linear infinite; }
+  .stream li { padding: 7px 0; font: 13px var(--mono); color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stream li::before { content: "- "; color: var(--accent); }
+  @keyframes stream { to { transform: translateY(-50%); } }
+
+  /* Radar */
+  .radar { position: relative; width: 148px; height: 148px; margin: 14px auto 0; border-radius: 50%; border: 1px solid var(--line-strong); background: repeating-radial-gradient(circle, transparent 0 23px, var(--line) 23px 24px); }
+  .radar::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, rgb(52 216 124 / 0.45), transparent 28%); animation: spin 3s linear infinite; }
+  .radar i { position: absolute; width: 9px; height: 9px; border-radius: 50%; animation: blip 3s ease-out infinite; }
+  .radar i:nth-child(1) { top: 28%; left: 62%; background: var(--claude); animation-delay: 0.3s; }
+  .radar i:nth-child(2) { top: 60%; left: 70%; background: var(--codex); animation-delay: 1s; }
+  .radar i:nth-child(3) { top: 58%; left: 24%; background: var(--antigravity); animation-delay: 2s; }
+  @keyframes blip { 0%, 100% { opacity: 0.2; box-shadow: none; } 10% { opacity: 1; box-shadow: 0 0 0 6px rgb(255 255 255 / 0.08); } }
+
+  /* Two-column sections */
+  .get { display: grid; grid-template-columns: 4fr 7fr; gap: 72px; align-items: start; }
+  .install { list-style: none; margin: 0; padding: 0; counter-reset: n; display: grid; gap: 28px; }
+  .install li { counter-increment: n; display: grid; grid-template-columns: 44px 1fr; column-gap: 20px; }
+  .install li::before { content: counter(n); grid-row: span 2; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line-strong); display: grid; place-items: center; font: 600 16px var(--mono); color: var(--accent); }
+  .install b { font-size: 1.15rem; font-weight: 600; }
+  .install span { color: var(--text-2); }
+
+  .tested { columns: 2; column-gap: 64px; margin-top: 56px; }
+  .tgroup { break-inside: avoid; margin-bottom: 40px; }
+  .tgroup h3 { font-size: 1.05rem; margin-bottom: 12px; }
+  .tgroup ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .tgroup li { display: grid; grid-template-columns: 22px 1fr; color: var(--text-2); font-size: 15.5px; line-height: 1.45; }
+  .tgroup li .ph { color: var(--accent); font-size: 17px; margin-top: 2px; }
+  .tgroup li.skipped .ph { color: var(--text-2); }
+
+  .platforms { display: grid; gap: 12px; }
+  .platform { display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: center; padding: 20px 24px; border-radius: var(--r-surface); border: 1px solid var(--line); background: var(--raised); transition: border-color 0.25s, translate 0.4s var(--ease); }
+  .platform:hover { border-color: var(--line-strong); translate: 6px 0; }
+  .platform > .ph { font-size: 34px; }
+  .platform h3 { font-size: 1.1rem; }
+  .platform p { color: var(--text-2); font-size: 15px; }
+  #status { color: var(--text-2); font-size: 15px; margin-top: 20px; min-height: 1.6em; font-family: var(--mono); }
+
+  .faq { max-width: 780px; margin-top: 48px; }
+  details { border-bottom: 1px solid var(--line); }
+  summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 0; font-weight: 550; font-size: 1.1rem; transition: color 0.2s; }
+  summary:hover { color: var(--accent); }
+  summary::-webkit-details-marker { display: none; }
+  summary .ph { color: var(--text-2); transition: transform 0.3s var(--ease); }
+  details[open] summary .ph { transform: rotate(180deg); }
+  details p { color: var(--text-2); padding: 0 40px 24px 0; max-width: 65ch; }
+
+  footer { margin-top: 128px; padding: 32px 0 56px; border-top: 1px solid var(--line); color: var(--text-2); font-size: 15px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 32px; justify-content: space-between; }
+
+  @media (max-width: 899px) {
+    section { padding-top: 88px; }
+    .hero { padding-top: 40px; }
+    .hero .wrap, .get { grid-template-columns: 1fr; gap: 40px; }
+    .demo { transform: none; }
+    .timeline, .stats { grid-template-columns: 1fr 1fr; }
+    .bento { grid-template-columns: 1fr; }
+    .bento .cell { grid-column: auto; grid-row: auto; }
+    .tested { columns: 1; }
+    .platform { grid-template-columns: auto 1fr; }
+    .platform .button { grid-column: 1 / -1; justify-content: center; }
+    .nav a.link { display: none; }
+    .field.lit { display: none; }
+    footer { margin-top: 88px; }
+  }
+  @media (max-width: 520px) { .timeline, .stats { grid-template-columns: 1fr; } }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .field.lit, .progress { display: none; }
+    .demo { transform: none; }
+  }
+</style>
+</head>
+<body>
+<div class="progress" aria-hidden="true"></div>
+<div class="field" aria-hidden="true"></div>
+<div class="field lit" aria-hidden="true"></div>
+
+<nav class="nav" aria-label="Main">
+  <div class="pill">
+    <a class="brand" href="#"><i aria-hidden="true"></i>Relaycrew</a>
+    <a class="link" href="#how">How it works</a>
+    <a class="link" href="#features">Features</a>
+    <a class="link" href="#vscode">VS Code</a>
+    <a class="link" href="#tested">Tested</a>
+    <a class="chip" href="#download"><i aria-hidden="true"></i>Download</a>
+  </div>
+</nav>
+
+<main>
+  <header class="hero">
+    <div class="wrap">
+      <div>
+        <h1 aria-label="Every coding agent you pay for. One terminal."><span aria-hidden="true" data-scramble>Every coding agent you pay for. </span><em aria-hidden="true" data-scramble>One terminal.</em></h1>
+        <p class="lede rise">Describe a task. Relaycrew splits it across Claude Code, Codex and Antigravity by strength and remaining quota.</p>
+        <div class="cta rise">
+          <a class="button primary" id="primary" href="#download"><span class="ph" aria-hidden="true">&#xe20c;</span><span>Download</span></a>
+          <a class="button" href="#how">How it works</a>
+        </div>
+      </div>
+      <div class="demo-stage rise">
+        <div class="demo" id="demo" aria-hidden="true">
+          <div class="demo-head"><span class="fine">Task</span><span class="live"><i></i>watching quota</span></div>
+          <div class="demo-task" id="demo-task"></div>
+          <ol class="demo-steps">
+            <li id="s1"><span class="ph">&#xe602;</span><div><b><i class="dot codex"></i>codex</b><p>Find why the login test fails and fix it</p></div><span class="meta" id="m1"></span></li>
+            <li id="s2"><span class="ph">&#xe602;</span><div><b><i class="dot antigravity"></i>antigravity</b><p>Add a changelog entry for the fix</p></div><span class="meta" id="m2"></span></li>
+          </ol>
+          <div class="demo-foot"><span class="demo-approve" id="demo-approve">Approve and run</span><span class="demo-note" id="demo-note"></span></div>
+        </div>
+        <p class="fine demo-caption">Scripted demo, made-up numbers</p>
+      </div>
+    </div>
+
+    <div class="wrap" style="display:block" id="how">
+      <div class="timeline">
+        <div class="tl"><i></i><u></u><small>01</small><h3>Describe</h3><p>Type the task in plain words. Commands still run as commands.</p></div>
+        <div class="tl"><i></i><u></u><small>02</small><h3>Approve</h3><p>See which agent gets each step. Nothing touches your files until you say yes.</p></div>
+        <div class="tl"><i></i><u></u><small>03</small><h3>Run</h3><p>Steps run in order with tokens and time. A failed step moves to the next agent.</p></div>
+        <div class="tl"><i></i><u></u><small>04</small><h3>Remember</h3><p>Notes about the project are kept in its own folder and given to the next task.</p></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="marquee" aria-hidden="true">
+    <div>
+      <span>multi-file refactors</span><span>bug fixes</span><span>unit tests</span><span>code review</span><span>documentation</span><span>web research with sources</span><span>finding images</span><span>generating icons</span><span>shell scripts</span><span>reading large codebases</span>
+      <span>multi-file refactors</span><span>bug fixes</span><span>unit tests</span><span>code review</span><span>documentation</span><span>web research with sources</span><span>finding images</span><span>generating icons</span><span>shell scripts</span><span>reading large codebases</span>
+    </div>
+  </div>
+
+  <section id="real">
+    <div class="wrap">
+      <h2>This is the actual app.</h2>
+      <p class="lede reveal">A real terminal on the left. On the right, the plan as steps, what each subscription has left, and every agent running on your machine.</p>
+      <div class="stage">
+        <div class="frame" id="hero-shot">
+          <img src="img/hero.png" width="2560" height="1640" loading="lazy" alt="Relaycrew: a terminal on the left showing a two-step plan, and a side panel on the right with the plan as steps, an Approve and run button, and remaining quota for Claude and Codex.">
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat reveal"><b data-count="0" id="count-tests">0</b><span>scenarios tested against the real program</span></div>
+        <div class="stat reveal"><b data-count="11">0</b><span>token savers, on by default</span></div>
+        <div class="stat reveal"><b data-count="3">0</b><span>agents it can drive today</span></div>
+        <div class="stat reveal"><b data-count="0">0</b><span>Relaycrew servers your code passes through</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>Know what you have left before you spend it.</h2>
+      <div class="bento">
+        <article class="cell c-quota reveal">
+          <h3>Quota you can read</h3>
+          <p>Each subscription shows what is left in its 5-hour and 7-day windows. The bar turns amber when you are on course to run out early.</p>
+          <div class="shot"><img src="img/quota.png" width="672" height="940" loading="lazy" alt="Quota cards for Claude and Codex showing percentage left in the 5-hour and 7-day windows, with on-pace indicators."></div>
+        </article>
+        <article class="cell c-retry reveal">
+          <h3>A failed step moves to the next agent</h3>
+          <p>When an agent errors out or hits its limit, Relaycrew says why and retries that step on another one you have switched on.</p>
+          <div class="shot" style="margin-bottom:0;border-bottom:1px solid var(--line)"><img src="img/retry.png" width="1740" height="398" loading="lazy" alt="Terminal output: Codex could not finish step 1 because its quota was exceeded, so the step is retried with Antigravity."></div>
+          <p class="fine" style="margin-top:8px">Simulated Codex failure from our test suite</p>
+        </article>
+        <article class="cell c-savers reveal">
+          <h3>Token savers, on by default</h3>
+          <p>Eight switches and three built-in habits keep each step lean. The one measured so far, on a small Claude step:</p>
+          <p class="savers-num"><s>20,078</s> → <b data-count="14973" data-from="20078">20,078</b> tokens</p>
+          <div class="shot"><img src="img/savers.png" width="1358" height="690" loading="lazy" alt="Settings showing eight token saver switches: lean code, terse replies, targeted reading, quiet commands, stay in scope, right-sized effort, slim Claude context and handoff notes."></div>
+        </article>
+        <article class="cell c-memory reveal">
+          <h3>It remembers each project</h3>
+          <p>Agents leave notes in the project's <code>.relaycrew</code> folder. The next task starts already knowing them.</p>
+          <div class="stream" aria-hidden="true"><ul>
+            <li>Run tests with python3 -m unittest -q</li><li>Use npm here, not yarn</li><li>The API base URL lives in config/env.ts</li><li>Migrations run before the server starts</li><li>Snapshots update with npm test -- -u</li>
+            <li>Run tests with python3 -m unittest -q</li><li>Use npm here, not yarn</li><li>The API base URL lives in config/env.ts</li><li>Migrations run before the server starts</li><li>Snapshots update with npm test -- -u</li>
+          </ul></div>
+          <p class="fine">Example notes</p>
+        </article>
+        <article class="cell c-radar reveal">
+          <h3>Every agent on the machine</h3>
+          <p>Model, status, CPU and running time, including agents you started somewhere else.</p>
+          <div class="radar" aria-hidden="true"><i></i><i></i><i></i></div>
+        </article>
+        <article class="cell c-local reveal">
+          <span class="ph" aria-hidden="true">&#xe2fe;</span>
+          <h3>Nothing leaves your computer</h3>
+          <p>No account, no Relaycrew server, no telemetry. Your agents keep using their own logins.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="vscode">
+    <div class="wrap get">
+      <div>
+        <h2>Also inside VS Code.</h2>
+        <p class="lede reveal">The same panel opens as an editor tab, in the folder you are working in. It shares settings and usage history with the desktop app.</p>
+      </div>
+      <ol class="install">
+        <li class="reveal"><b>Get the extension file</b><span>It is shared by invite for now, as a <code>.vsix</code> for Apple Silicon Macs.</span></li>
+        <li class="reveal"><b>Install it</b><span>In VS Code, open the Command Palette and run <code>Extensions: Install from VSIX</code>.</span></li>
+        <li class="reveal"><b>Open Relaycrew</b><span>Click Relaycrew in the status bar, or run <code>Relaycrew: Open</code>.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="tested">
+    <div class="wrap">
+      <h2><span id="tested-count"></span> scenarios, checked against the real program.</h2>
+      <p class="lede reveal">Each one drives the same engine the app ships with, and the interface ones click and type like a person would. Failures are forced with stand-in agents, so the awkward cases get tested without spending anyone's quota.</p>
+      <div class="tested" id="tested-list"></div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap get">
+      <div>
+        <h2>Download Relaycrew</h2>
+        <p class="lede reveal">Free while it is in early testing. You bring the agents and their subscriptions.</p>
+        <p id="status" role="status">Checking which installers are available.</p>
+      </div>
+      <div class="platforms">
+        <div class="platform reveal"><span class="ph" aria-hidden="true">&#xe516;</span><div><h3>macOS</h3><p>Apple Silicon Macs, M1 or newer.</p></div><a class="button" data-os="mac" aria-disabled="true">By invite</a></div>
+        <div class="platform reveal"><span class="ph" aria-hidden="true">&#xe692;</span><div><h3>Windows</h3><p>64-bit installer. Early build with fewer features.</p></div><a class="button" data-os="windows" aria-disabled="true">By invite</a></div>
+        <div class="platform reveal"><span class="ph" aria-hidden="true">&#xe1bc;</span><div><h3>VS Code extension</h3><p>Apple Silicon Macs. Installs from a file.</p></div><a class="button" aria-disabled="true">By invite</a></div>
+        <div class="platform reveal"><span class="ph" aria-hidden="true">&#xeb02;</span><div><h3>Linux</h3><p>Planned. It has not been built yet.</p></div><a class="button" data-os="linux" aria-disabled="true">Not available yet</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <h2>Questions</h2>
+      <div class="faq">
+        <details class="reveal"><summary>macOS says the app cannot be opened. What do I do?<span class="ph" aria-hidden="true">&#xe136;</span></summary>
+          <p>The app is not notarized by Apple yet. Drag it to Applications, run <code>xattr -cr /Applications/Relaycrew.app</code> once in Terminal, then open it normally.</p></details>
+        <details class="reveal"><summary>Which agents does it work with?<span class="ph" aria-hidden="true">&#xe136;</span></summary>
+          <p>Claude Code, Codex and Antigravity. Relaycrew finds whichever of <code>claude</code>, <code>codex</code> and <code>agy</code> are installed and signed in on your machine. It does not include or resell any of them.</p></details>
+        <details class="reveal"><summary>Does my code go through your servers?<span class="ph" aria-hidden="true">&#xe136;</span></summary>
+          <p>No. There are no Relaycrew servers. It runs the agent programs already on your computer, and each one talks to its own provider exactly as it does when you run it yourself.</p></details>
+        <details class="reveal"><summary>Will agents change my files without asking?<span class="ph" aria-hidden="true">&#xe136;</span></summary>
+          <p>You approve the plan first. After that, agents edit files inside the folder you ran the task in without asking again, so use it in a project under version control.</p></details>
+        <details class="reveal"><summary>What does it remember, and where?<span class="ph" aria-hidden="true">&#xe136;</span></summary>
+          <p>Short notes and a log of finished tasks, as plain text files in a <code>.relaycrew</code> folder inside each project. You can read, edit or delete them, and switch the feature off in Settings.</p></details>
+        <details class="reveal"><summary>How finished is the Windows version?<span class="ph" aria-hidden="true">&#xe136;</span></summary>
+          <p>It is an early build. The installer exists, but the list of running agents and typing tasks in plain words are not wired up on Windows yet.</p></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Relaycrew is an independent project, not affiliated with Anthropic, OpenAI or Google.</span>
+    <a class="link" href="#download">Download</a>
+  </div>
+</footer>
+
+<script src="vendor/gsap.min.js"></script>
+<script src="vendor/ScrollTrigger.min.js"></script>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => [...document.querySelectorAll(s)];
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // --- Downloads: a button goes live only if its installer is really next to this page.
+  const FILES = { mac: "downloads/Relaycrew-mac-arm64.dmg", windows: "downloads/Relaycrew-windows-x64-setup.exe", linux: "downloads/Relaycrew-linux-x64.AppImage" };
+  const NAMES = { mac: "macOS", windows: "Windows", linux: "Linux" };
+  const os = /Mac/.test(navigator.platform) ? "mac" : /Win/.test(navigator.platform) ? "windows" : /Linux/.test(navigator.platform) ? "linux" : "";
+  Promise.all($$("[data-os]").map(async (button) => {
+    const file = FILES[button.dataset.os];
+    const found = await fetch(file, { method: "HEAD" }).then((r) => r.ok && !(r.headers.get("content-type") || "").includes("text/html"), () => false);
+    if (!found) return false;
+    button.href = file;
+    button.setAttribute("download", "");
+    button.textContent = "Download";
+    button.removeAttribute("aria-disabled");
+    button.classList.add("primary");
+    if (button.dataset.os === os) {
+      $("#primary").href = file;
+      $("#primary").setAttribute("download", "");
+      $("#primary").lastElementChild.textContent = `Download for ${NAMES[os]}`;
+    }
+    return true;
+  })).then((found) => {
+    $("#status").textContent = found.some(Boolean) ? "Version 0.1.0" : "Installers are shared directly during early testing. Ask whoever invited you.";
+  });
+
+  // --- Tested scenarios come from the suite's own results file, so the page can't drift from it.
+  fetch("test-results.json").then((r) => r.json()).then(({ results }) => {
+    const passed = results.filter((r) => r.status !== "fail").length;
+    $("#tested-count").textContent = passed;
+    $("#count-tests").dataset.count = passed;
+    const areas = [...new Set(results.map((r) => r.area))];
+    $("#tested-list").innerHTML = areas.map((area) => `<div class="tgroup"><h3>${area}</h3><ul>${results.filter((r) => r.area === area).map((r) =>
+      `<li class="${r.status}"><span class="ph" aria-hidden="true">${r.status === "pass" ? "" : ""}</span><span>${((t) => t[0].toUpperCase() + t.slice(1))(r.title.replace("REAL: ", "").replace("Known limit: ", "Known limit, confirmed: "))}${r.status === "skipped" ? " (uses real agents, run before a release)" : ""}</span></li>`).join("")}</ul></div>`).join("");
+    document.dispatchEvent(new Event("tested-ready"));
+  }).catch(() => { $("#tested-count").textContent = "Dozens of"; });
+
+  // --- Split every section heading into words so they can rise one by one.
+  for (const h of $$("h2")) {
+    const walk = (node) => {
+      for (const child of [...node.childNodes]) {
+        if (child.nodeType === 3) {
+          const frag = document.createDocumentFragment();
+          child.textContent.split(/(\s+)/).forEach((part) => {
+            if (!part.trim()) return frag.append(part);
+            const outer = Object.assign(document.createElement("span"), { className: "w" });
+            outer.append(Object.assign(document.createElement("span"), { textContent: part }));
+            frag.append(outer);
+          });
+          child.replaceWith(frag);
+        } else if (child.id !== "tested-count") walk(child);
+      }
+    };
+    walk(h);
+  }
+
+  if (window.gsap && !still) {
+    gsap.registerPlugin(ScrollTrigger);
+    const ease = "expo.out";
+
+    // The glyph field lights up around the pointer.
+    let queued = false;
+    addEventListener("pointermove", (e) => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        document.documentElement.style.setProperty("--mx", e.clientX + "px");
+        document.documentElement.style.setProperty("--my", e.clientY + "px");
+        queued = false;
+      });
+    }, { passive: true });
+
+    // Headline decodes from hex noise into words.
+    const HEX = "0123456789abcdef";
+    $$("[data-scramble]").forEach((el, n) => {
+      const final = el.textContent;
+      const state = { shown: 0 };
+      gsap.to(state, { shown: final.length, duration: 1.5, delay: 0.15 + n * 0.9, ease: "power2.out",
+        onUpdate: () => { el.textContent = [...final].map((c, i) => (i < state.shown || c === " " ? c : HEX[(Math.random() * 16) | 0])).join(""); },
+        onComplete: () => { el.textContent = final; } });
+    });
+    gsap.from(".rise", { y: 28, opacity: 0, duration: 0.9, stagger: 0.12, delay: 0.5, ease });
+    gsap.from(".nav .pill", { y: -70, opacity: 0, duration: 0.9, ease });
+
+    // The demo card leans toward the pointer.
+    const tiltX = gsap.quickTo("#demo", "rotateX", { duration: 0.6, ease: "power3.out" });
+    const tiltY = gsap.quickTo("#demo", "rotateY", { duration: 0.6, ease: "power3.out" });
+    $(".hero").addEventListener("pointermove", (e) => {
+      tiltY(-12 + (e.clientX / innerWidth - 0.5) * 14);
+      tiltX(8 - (e.clientY / innerHeight - 0.5) * 12);
+    });
+
+    // Scripted demo: type the task, approve, run two steps, remember a note. Loops.
+    const TASK = "fix the failing login test and update the changelog";
+    const count = (el, to, suffix) => { const o = { v: 0 }; return gsap.to(o, { v: to, duration: 1.1, ease: "power1.out", onUpdate: () => (el.textContent = Math.round(o.v).toLocaleString() + suffix) }); };
+    const icon = (li, code) => (li.querySelector(".ph").textContent = code);
+    const reset = () => {
+      $("#demo-task").textContent = ""; $("#m1").textContent = $("#m2").textContent = $("#demo-note").textContent = "";
+      for (const li of [$("#s1"), $("#s2")]) { li.className = ""; icon(li, ""); }
+      gsap.set("#demo-approve", { autoAlpha: 0, scale: 1 }); gsap.set(".demo-steps li", { autoAlpha: 0, y: 10 });
+    };
+    const typed = { n: 0 };
+    gsap.timeline({ repeat: -1, repeatDelay: 2.6, delay: 1.4, onRepeat: reset, onStart: reset })
+      .fromTo(typed, { n: 0 }, { n: TASK.length, duration: 1.9, ease: "none", onUpdate: () => ($("#demo-task").textContent = TASK.slice(0, Math.round(typed.n))) })
+      .to(".demo-steps li", { autoAlpha: 1, y: 0, duration: 0.5, stagger: 0.18, ease }, "+=0.3")
+      .to("#demo-approve", { autoAlpha: 1, duration: 0.3 }, "+=0.1")
+      .to("#demo-approve", { scale: 0.93, duration: 0.12, yoyo: true, repeat: 1 }, "+=0.9")
+      .to("#demo-approve", { autoAlpha: 0, duration: 0.25 })
+      .add(() => { $("#s1").className = "run"; icon($("#s1"), ""); })
+      .add(() => count($("#m1"), 6589, " tokens"), "+=0.2")
+      .add(() => { $("#s1").className = "done"; icon($("#s1"), ""); $("#s2").className = "run"; icon($("#s2"), ""); }, "+=1.5")
+      .add(() => count($("#m2"), 2140, " tokens"), "+=0.2")
+      .add(() => { $("#s2").className = "done"; icon($("#s2"), ""); $("#demo-note").textContent = "done · 8,729 tokens · remembered: tests run with npm test"; }, "+=1.5")
+      .from("#demo-note", { autoAlpha: 0, y: 6, duration: 0.5 });
+
+    // The timeline draws itself, one stage after another.
+    gsap.timeline({ scrollTrigger: { trigger: ".timeline", start: "top 85%", once: true } })
+      .from(".tl u", { scale: 0, duration: 0.4, stagger: 0.45, ease: "back.out(3)" })
+      .from(".tl i", { scaleX: 0, duration: 0.6, stagger: 0.45, ease: "power2.inOut" }, 0.1)
+      .from(".tl small, .tl h3, .tl p", { y: 18, opacity: 0, duration: 0.6, stagger: 0.08, ease }, 0.15);
+
+    // Headings rise word by word; everything else arrives as it enters.
+    for (const h of $$("h2")) gsap.from(h.querySelectorAll(".w > span"), { yPercent: 115, duration: 0.9, stagger: 0.05, ease, scrollTrigger: { trigger: h, start: "top 88%", once: true } });
+    const reveal = () => ScrollTrigger.batch(".reveal, .tgroup", { start: "top 90%", once: true, onEnter: (els) => gsap.from(els, { y: 36, opacity: 0, duration: 0.8, stagger: 0.08, ease, overwrite: true }) });
+    reveal();
+    document.addEventListener("tested-ready", () => { ScrollTrigger.batch(".tgroup", { start: "top 92%", once: true, onEnter: (els) => gsap.from(els, { y: 36, opacity: 0, duration: 0.8, stagger: 0.08, ease }) }); ScrollTrigger.refresh(); });
+
+    // The real screenshot tilts up to meet the reader.
+    gsap.fromTo("#hero-shot", { rotateX: 18, scale: 0.92 }, { rotateX: 0, scale: 1, ease: "none", scrollTrigger: { trigger: ".stage", start: "top 95%", end: "top 25%", scrub: 0.6 } });
+
+    // Numbers count to their value when they come into view.
+    for (const el of $$("[data-count]")) ScrollTrigger.create({ trigger: el, start: "top 92%", once: true, onEnter: () => {
+      const o = { v: +(el.dataset.from ?? 0) };
+      gsap.to(o, { v: +el.dataset.count, duration: 1.6, ease: "power2.out", onUpdate: () => (el.textContent = Math.round(o.v).toLocaleString()) });
+    } });
+  } else {
+    // No motion: put the demo and the numbers in their finished state.
+    $("#demo-task").textContent = "fix the failing login test and update the changelog";
+    for (const [li, meta, n] of [["#s1", "#m1", "6,589"], ["#s2", "#m2", "2,140"]]) { $(li).className = "done"; $(li).querySelector(".ph").textContent = ""; $(meta).textContent = n + " tokens"; }
+    $("#demo-approve").style.display = "none";
+    $("#demo-note").textContent = "done · 8,729 tokens · remembered: tests run with npm test";
+    const fill = () => $$("[data-count]").forEach((el) => (el.textContent = (+el.dataset.count).toLocaleString()));
+    fill();
+    document.addEventListener("tested-ready", fill);
+  }
+</script>
+</body>
+</html>

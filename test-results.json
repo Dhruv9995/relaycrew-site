@@ -1,0 +1,253 @@
+{
+  "at": 1791914544,
+  "counts": {
+    "pass": 33,
+    "fail": 0,
+    "skipped": 2
+  },
+  "results": [
+    {
+      "area": "Terminal",
+      "title": "A plain command runs and its output comes back",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Terminal",
+      "title": "Pipes and quotes behave like a normal shell",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Terminal",
+      "title": "The working folder persists between commands",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.2
+    },
+    {
+      "area": "Terminal",
+      "title": "An interactive program can be typed into (Python prompt)",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.3
+    },
+    {
+      "area": "Terminal",
+      "title": "Ctrl+C interrupts a running command",
+      "status": "pass",
+      "detail": "",
+      "secs": 1.1
+    },
+    {
+      "area": "Terminal",
+      "title": "Resizing the window reaches the program",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Terminal",
+      "title": "Non-English text and emoji survive the round trip",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Terminal",
+      "title": "Five thousand lines of output arrive complete and in order",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Terminal",
+      "title": "When a program exits, its exit code is reported",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Input routing",
+      "title": "A short typo gives 'command not found' and does not start planning",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Input routing",
+      "title": "A sentence typed at the prompt becomes a task, and 'n' cancels it",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.2
+    },
+    {
+      "area": "Input routing",
+      "title": "Known limit: a sentence starting with a real command runs that command",
+      "status": "pass",
+      "detail": "Documented behaviour. 'Send to agents' (next scenario) is the way around it.",
+      "secs": 0.1
+    },
+    {
+      "area": "Input routing",
+      "title": "'Send to agents' passes apostrophes, ? and * through untouched",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.2
+    },
+    {
+      "area": "Task runner",
+      "title": "Declining the plan runs nothing and records it as cancelled",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Task runner",
+      "title": "With no agent installed it says so and exits cleanly",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.0
+    },
+    {
+      "area": "Task runner",
+      "title": "With one agent enabled it skips planning and runs the task directly",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.2
+    },
+    {
+      "area": "Task runner",
+      "title": "If the planner replies with nonsense, the whole task goes to one agent",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Task runner",
+      "title": "A failed step is retried on another agent, with the reason and token count",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.2
+    },
+    {
+      "area": "Task runner",
+      "title": "If every agent fails, it stops and says which steps were skipped",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.2
+    },
+    {
+      "area": "Task runner",
+      "title": "Outside a git repository, a Codex step is rerouted with an explanation",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Task runner",
+      "title": "Antigravity reporting success after a blocked action is treated as a failure",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.2
+    },
+    {
+      "area": "Task runner",
+      "title": "Token counts are totalled and logged for the dashboard",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.2
+    },
+    {
+      "area": "Token savers",
+      "title": "By default every saver rule, the handoff note and the low-effort flag reach the agents",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.2
+    },
+    {
+      "area": "Token savers",
+      "title": "Switching the savers off in Settings removes them",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.2
+    },
+    {
+      "area": "Project memory",
+      "title": "A note an agent asks to keep is saved in the project's .relaycrew folder",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Project memory",
+      "title": "The next task is told the saved notes and what was done before",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.2
+    },
+    {
+      "area": "Project memory",
+      "title": "With project memory switched off, nothing is saved or sent",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Interface",
+      "title": "Typing in the command box and pressing Enter runs the command",
+      "status": "pass",
+      "detail": "",
+      "secs": 7.9
+    },
+    {
+      "area": "Interface",
+      "title": "The 'Approve and run' button starts the plan",
+      "status": "pass",
+      "detail": "",
+      "secs": 11.6
+    },
+    {
+      "area": "Interface",
+      "title": "The 'Cancel' button declines the plan and nothing runs",
+      "status": "pass",
+      "detail": "",
+      "secs": 11.4
+    },
+    {
+      "area": "Interface",
+      "title": "'Send to agents' sends the text as a task, punctuation intact",
+      "status": "pass",
+      "detail": "",
+      "secs": 8.0
+    },
+    {
+      "area": "Interface",
+      "title": "A switch changed in Settings is saved",
+      "status": "pass",
+      "detail": "",
+      "secs": 7.0
+    },
+    {
+      "area": "Interface",
+      "title": "If the task is interrupted while waiting, the Approve button goes away",
+      "status": "pass",
+      "detail": "",
+      "secs": 0.1
+    },
+    {
+      "area": "Real agents",
+      "title": "REAL: the planner returns a usable plan for a mixed everyday task",
+      "status": "skipped",
+      "detail": "Spends real quota; run with --real."
+    },
+    {
+      "area": "Real agents",
+      "title": "REAL: Codex writes code and tests, Antigravity documents it, and the tests pass",
+      "status": "skipped",
+      "detail": "Spends real quota; run with --real."
+    }
+  ]
+}
